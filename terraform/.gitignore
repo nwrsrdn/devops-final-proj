@@ -1,0 +1,11 @@
+# Terraform files
+*.tfstate
+*.tfstate.backup
+*.tfplan
+.terraform/
+
+# Log files
+*.log
+
+# Local backup files (if using file-based state)
+*.backup

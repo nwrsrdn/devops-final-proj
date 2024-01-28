@@ -1,0 +1,95 @@
+stages:
+  - test
+  - build
+  - deploy
+
+.build_template: &build_template
+  image: public.ecr.aws/g4v8g9l8/kaniko-python-aws:latest
+  before_script:
+    - echo "Building Docker Image"
+    - aws ecr describe-images --repository-name vote --query 'sort_by(imageDetails, &imagePushedAt) | [-1].{ImageTags:imageTags}' --output text > version.txt
+    - current_version=$(cat -t version.txt | sed 's/IMAGETAGS^I//g')
+    - new_version=$(echo "${current_version} + 0.1" | bc)
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"credsStore\":\"ecr-login\"}" > /kaniko/.docker/config.json
+    - echo "Pushing to AWS ECR"
+    - /kaniko/executor --context "./apps/${APP}" --dockerfile "./Dockerfile" --destination "${ECR_REGISTRY}/${APP}:${new_version}"
+  after_script:
+    - echo "Build Success!"
+  rules:
+    - changes:
+        - apps/$APP/**/*
+  tags:
+    - devops
+
+.deploy_template: &deploy_template
+  image: alpine/k8s:1.24.15
+  before_script:
+    - echo "Deploying to AWS EKS Cluster"
+    # - export MANIFEST_FILE="./kubernetes/manifests/deployments/${APP}_app_deployment.yaml"
+    - export DEPLOY_NAME="${APP}-app"
+    - aws ecr describe-images --repository-name ${APP} --query 'sort_by(imageDetails, &imagePushedAt) | [-1].{ImageTags:imageTags}' --output text > version.txt
+    - current_version=$(cat -t version.txt | sed 's/IMAGETAGS^I//g')
+  script:
+    - aws eks update-kubeconfig --name $EKS_CLUSTER
+    - kubectl config set-context --current --namespace=cloud
+    # - kubectl apply -f $MANIFEST_FILE
+    - kubectl set image deployments/$APP-app $APP-app=$ECR_REGISTRY/$APP:$current_version
+  after_script:
+    - echo "Deployment Success!"
+  rules:
+    - changes:
+        - apps/$APP/**/*
+  tags:
+    - devops
+
+functional_test:
+  stage: test
+  image: alpine:latest
+  script:
+    - echo "Running tests..."
+  tags:
+    - devops
+
+vote_app_build:
+  stage: build
+  <<: *build_template
+  variables:
+    APP: vote
+
+vote_app_deploy:
+  stage: deploy
+  <<: *deploy_template
+  variables:
+    APP: vote
+  needs:
+    - vote_app_build
+
+result_app_build:
+  stage: build
+  <<: *build_template
+  variables:
+    APP: result
+
+result_app_deploy:
+  stage: deploy
+  <<: *deploy_template
+  variables:
+    APP: result
+  needs:
+    - result_app_build
+
+worker_app_build:
+  stage: build
+  <<: *build_template
+  variables:
+    APP: worker
+
+worker_app_deploy:
+  stage: deploy
+  <<: *deploy_template
+  variables:
+    APP: worker
+  needs:
+    - worker_app_build

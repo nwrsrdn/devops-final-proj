@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/subnets: subnet-06ecdea6d2df981dc, subnet-0c9fd30d79c798499
+    kubernetes.io/ingress.class: alb
+  name: app-ingress
+  namespace: cloud
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vote
+            port:
+              number: 5000
+      - path: /results
+        pathType: Prefix
+        backend:
+          service:
+            name: result
+            port:
+              number: 5001

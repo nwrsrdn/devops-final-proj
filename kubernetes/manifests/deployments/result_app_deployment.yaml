@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  result-app
+  namespace: cloud
+  labels:
+    app:  result-app
+spec:
+  selector:
+    matchLabels:
+      app: result-app-pod
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app:  result-app-pod
+    spec:
+      imagePullSecrets:
+      - name: ecr-credentials
+      containers:
+      - name:  result-app
+        image: 966437228244.dkr.ecr.ap-southeast-1.amazonaws.com/result:1.0
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 200m
+            memory: 512Mi
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: voting-app-config-map
+              key: postgres_user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: voting-app-secrets
+              key: postgres_password
+        ports:
+        - containerPort: 5001
+      restartPolicy: Always

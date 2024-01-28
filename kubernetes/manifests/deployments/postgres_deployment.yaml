@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  postgres-db
+  namespace: cloud
+  labels:
+    app:  postgres-db
+spec:
+  selector:
+    matchLabels:
+      app: postgres-db-pod
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app:  postgres-db-pod
+    spec:
+      containers:
+      - name:  postgres-db
+        image:  postgres:14
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 200m
+            memory: 512Mi
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: voting-app-config-map
+              key: postgres_user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: voting-app-secrets
+              key: postgres_password
+        ports:
+        - containerPort: 5432
+          name:  postgres-db

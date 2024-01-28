@@ -1,0 +1,103 @@
+# version is now using "compose spec"
+# v2 and v3 are now combined!
+# docker-compose v1.27+ required
+
+version: '3'
+
+services:
+  vote:
+    build: ./vote
+    depends_on:
+      - redis
+    #     condition: service_healthy
+    volumes:
+      - './vote:/app'
+    ports:
+      - '5000:5000'
+    networks:
+      - front-tier
+      - back-tier
+
+  result:
+    build: ./result
+    depends_on:
+      - db
+    #   condition: service_healthy
+    volumes:
+      - './result:/app'
+    ports:
+      - '5001:5001'
+    networks:
+      - front-tier
+      - back-tier
+
+  worker:
+    build:
+      context: ./worker
+    depends_on:
+      - redis
+      - db
+      # redis:
+      #   condition: service_healthy
+      # db:
+      #   condition: service_healthy
+    networks:
+      - back-tier
+
+  redis:
+    image: redis:7.0-alpine3.15
+    volumes:
+      - './common/healthchecks:/healthchecks'
+    # healthcheck:
+    #   test: /healthchecks/redis.sh
+    #   interval: '5s'
+    networks:
+      - back-tier
+
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: 'postgres'
+      POSTGRES_PASSWORD: 'postgres'
+    volumes:
+      - 'db-data:/var/lib/postgresql/data'
+      - './common/healthchecks:/healthchecks'
+    # healthcheck:
+    #   test: /healthchecks/postgres.sh
+    #   interval: '5s'
+    ports:
+      - '5432:5432'
+    networks:
+      - back-tier
+
+  proxy:
+    image: nginx:1.18.0-alpine
+    restart: always
+    volumes:
+      - './proxy/default.conf:/etc/nginx/conf.d/default.conf:ro'
+      - './proxy/self-signed-ssl/:/etc/nginx/ssl/live/:ro'
+    ports:
+      - '80:80'
+      - '443:443'
+    networks:
+      - front-tier
+    depends_on:
+      - vote
+      - result
+
+  seeder:
+    build:
+      context: ./common/seeder
+    depends_on:
+      - vote
+      - result
+    networks:
+      - front-tier
+      - back-tier
+
+volumes:
+  db-data:
+
+networks:
+  front-tier:
+  back-tier:
